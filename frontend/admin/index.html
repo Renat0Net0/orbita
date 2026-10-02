@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Pedidos — Órbita</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #080e18;
+      color: #edf2f7;
+      font-family: Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    header,
+    main {
+      max-width: 1100px;
+      margin: auto;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid #293345;
+    }
+
+    a {
+      color: #c6ff64;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+    }
+
+    .description {
+      color: #b7c2d2;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin: 24px 0;
+    }
+
+    button,
+    select {
+      font: inherit;
+      padding: 10px 14px;
+      border-radius: 6px;
+    }
+
+    button {
+      background: #c6ff64;
+      color: #101316;
+      border: 0;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+
+    select {
+      background: #080e18;
+      color: #edf2f7;
+      border: 1px solid #52627b;
+    }
+
+    button:focus-visible,
+    select:focus-visible,
+    a:focus-visible {
+      outline: 2px solid #c6ff64;
+      outline-offset: 4px;
+    }
+
+    #message {
+      min-height: 24px;
+      color: #c6ff64;
+    }
+
+    .orders {
+      display: grid;
+      gap: 20px;
+    }
+
+    .order {
+      padding: 24px;
+      background: #121c2b;
+      border: 1px solid #293345;
+      border-radius: 12px;
+    }
+
+    .order h2 {
+      margin-top: 0;
+    }
+
+    .order p {
+      margin: 10px 0;
+      overflow-wrap: anywhere;
+    }
+
+    .order ul {
+      padding-left: 22px;
+    }
+
+    .status-controls {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #293345;
+    }
+
+    .order-message {
+      color: #c6ff64;
+    }
+
+    @media (max-width: 600px) {
+      header,
+      main {
+        padding: 18px;
+      }
+
+      .order {
+        padding: 18px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <strong>Órbita / Administração</strong>
+    <div>
+      <a href="/">Voltar ao site</a>
+      <button
+        id="logout-button"
+        type="button"
+        style="margin-left: 16px;"
+      >
+        Sair
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <h1>Pedidos de projeto</h1>
+
+    <p class="description">
+      Consulte os briefings recebidos e acompanhe o andamento.
+      Área de teste local, ainda sem login.
+    </p>
+
+    <div class="toolbar">
+      <button id="reload" type="button">
+        Atualizar pedidos
+      </button>
+
+      <span id="count"></span>
+    </div>
+
+    <p id="message" role="status"></p>
+
+    <div
+      class="orders"
+      id="orders"
+      aria-label="Pedidos recebidos"
+      aria-busy="false"
+    ></div>
+  </main>
+
+  <script>
+    const ordersContainer = document.getElementById('orders');
+    const reloadButton = document.getElementById('reload');
+    const message = document.getElementById('message');
+    const count = document.getElementById('count');
+
+    const allowedStatuses = [
+      'Recebido',
+      'Em análise',
+      'Concluído'
+    ];
+
+    const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      timeZone: 'America/Manaus'
+    });
+
+    // Exibe os dados como texto, sem interpretar HTML.
+    function addDetail(container, label, value) {
+      const paragraph = document.createElement('p');
+      const title = document.createElement('strong');
+
+      title.textContent = `${label}: `;
+      paragraph.append(title, document.createTextNode(value ?? ''));
+      container.append(paragraph);
+    }
+
+    function formatDate(value) {
+      const date = new Date(value);
+
+      return Number.isNaN(date.getTime())
+        ? 'Data indisponível'
+        : dateFormatter.format(date);
+    }
+
+    function createOrderCard(order) {
+      const card = document.createElement('article');
+      card.className = 'order';
+
+      const heading = document.createElement('h2');
+      heading.textContent = `Pedido #${order.id} — ${order.marca}`;
+      card.append(heading);
+
+      addDetail(card, 'Cliente', order.nome);
+      addDetail(card, 'E-mail', order.email);
+      addDetail(card, 'Objetivo', order.objetivo);
+      addDetail(card, 'Recebido em Manaus', formatDate(order.criado_em));
+
+      const currentStatus = document.createElement('p');
+      card.append(currentStatus);
+
+      function showStatus(status) {
+        currentStatus.replaceChildren();
+
+        const title = document.createElement('strong');
+        title.textContent = 'Status atual: ';
+
+        currentStatus.append(title, document.createTextNode(status));
+      }
+
+      showStatus(order.status);
+
+      const servicesTitle = document.createElement('strong');
+      servicesTitle.textContent = 'Serviços solicitados';
+      card.append(servicesTitle);
+
+      const servicesList = document.createElement('ul');
+
+      for (const service of order.servicos) {
+        const item = document.createElement('li');
+        item.textContent = service.nome;
+        servicesList.append(item);
+      }
+
+      card.append(servicesList);
+
+      const controls = document.createElement('div');
+      controls.className = 'status-controls';
+
+      const selectId = `status-${order.id}`;
+
+      const label = document.createElement('label');
+      label.htmlFor = selectId;
+      label.textContent = 'Alterar status:';
+
+      const select = document.createElement('select');
+      select.id = selectId;
+
+      for (const status of allowedStatuses) {
+        const option = document.createElement('option');
+        option.value = status;
+        option.textContent = status;
+        option.selected = status === order.status;
+        select.append(option);
+      }
+
+      const saveButton = document.createElement('button');
+      saveButton.type = 'button';
+      saveButton.textContent = 'Salvar status';
+
+      controls.append(label, select, saveButton);
+      card.append(controls);
+
+      const feedback = document.createElement('p');
+      feedback.className = 'order-message';
+      feedback.setAttribute('role', 'status');
+      card.append(feedback);
+
+      select.addEventListener('change', () => {
+        feedback.textContent = '';
+      });
+
+      saveButton.addEventListener('click', async () => {
+        const newStatus = select.value;
+
+        if (newStatus === order.status) {
+          feedback.textContent = 'Esse já é o status atual.';
+          return;
+        }
+
+        saveButton.disabled = true;
+        select.disabled = true;
+        saveButton.textContent = 'Salvando...';
+        feedback.textContent = '';
+
+        try {
+          const response = await fetch(
+            `/api/briefings/${order.id}/status`,
+            {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ status: newStatus })
+            }
+          );
+
+          const result = await response.json().catch(() => null);
+
+          if (!response.ok) {
+            throw new Error(
+              result?.mensagem || 'Não foi possível salvar o status.'
+            );
+          }
+
+          if (!allowedStatuses.includes(result?.status)) {
+            throw new Error(
+              'Resposta inesperada. Atualize os pedidos para conferir.'
+            );
+          }
+
+          order.status = result.status;
+          showStatus(order.status);
+          feedback.textContent = 'Status atualizado com sucesso!';
+        } catch (error) {
+          select.value = order.status;
+
+          feedback.textContent = error instanceof TypeError
+            ? 'Falha de conexão. Atualize os pedidos para conferir o status.'
+            : error.message;
+        } finally {
+          saveButton.disabled = false;
+          select.disabled = false;
+          saveButton.textContent = 'Salvar status';
+        }
+      });
+
+      return card;
+    }
+
+    async function loadOrders() {
+      reloadButton.disabled = true;
+      ordersContainer.setAttribute('aria-busy', 'true');
+      message.textContent = 'Carregando pedidos...';
+
+      try {
+        const response = await fetch('/api/briefings', {
+          cache: 'no-store'
+        });
+
+        const orders = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(
+            orders?.mensagem || 'Não foi possível consultar os pedidos.'
+          );
+        }
+
+        if (!Array.isArray(orders)) {
+          throw new Error('A API retornou um formato inesperado.');
+        }
+
+        const cards = orders.map(createOrderCard);
+        ordersContainer.replaceChildren(...cards);
+
+        count.textContent =
+          `${orders.length} pedido${orders.length === 1 ? '' : 's'}`;
+
+        message.textContent = orders.length
+          ? 'Pedidos atualizados.'
+          : 'Nenhum pedido cadastrado.';
+      } catch (error) {
+        message.textContent = error instanceof TypeError
+          ? 'Não foi possível conectar à API. Confira se o servidor está rodando.'
+          : error.message;
+      } finally {
+        reloadButton.disabled = false;
+        ordersContainer.setAttribute('aria-busy', 'false');
+      }
+    }
+
+    reloadButton.addEventListener('click', loadOrders);
+    loadOrders();
+  </script>
+  <script>
+    (() => {
+      const logoutButton = document.getElementById('logout-button');
+      const message = document.getElementById('message');
+
+      // Confere a sessão ao abrir ou retornar à página.
+      async function checkSession() {
+        try {
+          const response = await fetch('/api/sessao', {
+            cache: 'no-store'
+          });
+
+          if (!response.ok) {
+            throw new Error('Não foi possível verificar a sessão.');
+          }
+
+          const session = await response.json();
+
+          if (!session.autenticado) {
+            window.location.replace('/login.html');
+          }
+        } catch (error) {
+          message.textContent =
+            'Não foi possível verificar a sessão. Atualize a página.';
+        }
+      }
+
+      window.addEventListener('pageshow', checkSession);
+
+      // Encerra a sessão no servidor antes de sair da página.
+      logoutButton.addEventListener('click', async () => {
+        logoutButton.disabled = true;
+        logoutButton.textContent = 'Saindo...';
+
+        try {
+          const response = await fetch('/api/logout', {
+            method: 'POST'
+          });
+
+          if (!response.ok) {
+            throw new Error('Não foi possível encerrar a sessão.');
+          }
+
+          window.location.replace('/login.html');
+        } catch (error) {
+          message.textContent =
+            'Não foi possível sair. Confira a conexão e tente novamente.';
+
+          logoutButton.disabled = false;
+          logoutButton.textContent = 'Sair';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

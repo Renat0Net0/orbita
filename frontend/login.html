@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Login — Órbita</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      display: grid;
+      place-items: center;
+      background: #080e18;
+      color: #edf2f7;
+      font: 16px/1.5 Arial, sans-serif;
+    }
+
+    main {
+      width: 100%;
+      max-width: 420px;
+      padding: 32px;
+      background: #121c2b;
+      border: 1px solid #293345;
+      border-radius: 14px;
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    p {
+      color: #b7c2d2;
+    }
+
+    label {
+      display: block;
+      margin-top: 20px;
+    }
+
+    label span {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      background: #080e18;
+      color: #edf2f7;
+      border: 1px solid #52627b;
+      border-radius: 6px;
+      font: inherit;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 24px;
+      padding: 12px;
+      background: #c6ff64;
+      color: #101316;
+      border: 0;
+      border-radius: 6px;
+      font: inherit;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    a {
+      color: #c6ff64;
+    }
+
+    input:focus-visible,
+    button:focus-visible,
+    a:focus-visible {
+      outline: 2px solid #c6ff64;
+      outline-offset: 4px;
+    }
+
+    #message {
+      min-height: 24px;
+      color: #c6ff64;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>Órbita / Login</h1>
+
+    <p>Entre para acompanhar os pedidos de projeto.</p>
+
+    <form id="login-form">
+      <label for="email">
+        <span>E-mail</span>
+
+        <input
+          id="email"
+          type="email"
+          maxlength="254"
+          autocomplete="username"
+          required
+        >
+      </label>
+
+      <label for="password">
+        <span>Senha</span>
+
+        <input
+          id="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        >
+      </label>
+
+      <button id="login-button" type="submit">
+        Entrar
+      </button>
+    </form>
+
+    <p id="message" role="status"></p>
+
+    <a href="/">Voltar ao site</a>
+  </main>
+
+  <script>
+    const form = document.getElementById('login-form');
+    const button = document.getElementById('login-button');
+    const message = document.getElementById('message');
+
+    let sending = false;
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      if (sending || !form.reportValidity()) return;
+
+      sending = true;
+      button.disabled = true;
+      button.textContent = 'Entrando...';
+      message.textContent = '';
+
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: document.getElementById('email').value.trim(),
+            senha: document.getElementById('password').value
+          })
+        });
+
+        const result = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(
+            result?.mensagem || 'Não foi possível realizar o login.'
+          );
+        }
+
+        if (!result?.usuario?.id) {
+          throw new Error('Resposta inesperada do servidor.');
+        }
+
+        document.getElementById('password').value = '';
+        window.location.replace('/admin/');
+      } catch (error) {
+        message.textContent = error instanceof TypeError
+          ? 'Falha de conexão. Confira se a API está rodando.'
+          : error.message;
+
+        button.disabled = false;
+        button.textContent = 'Entrar';
+        sending = false;
+      }
+    });
+  </script>
+</body>
+</html>
