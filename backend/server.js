@@ -27,6 +27,11 @@ if (
 
 app.disable('x-powered-by');
 
+// Reconhece HTTPS encaminhado pelo proxy do Render.
+if (producao) {
+  app.set('trust proxy', 1);
+}
+
 // ==================================================
 // CONFIGURAÇÃO DO SERVIDOR E DO LOGIN
 // ==================================================
